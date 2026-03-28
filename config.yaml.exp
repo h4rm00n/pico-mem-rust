@@ -1,0 +1,21 @@
+llm:
+  api_key: "your_llm_api_key_here"
+  base_url: "https://api.siliconflow.cn/v1"
+  model: "Pro/deepseek-ai/DeepSeek-V3.2"
+
+embedding:
+  api_key: "your_embedding_api_key_here"
+  base_url: "https://api.siliconflow.cn/v1"
+  model: "BAAI/bge-m3"
+  embedding_dim: 1024
+
+database:
+  db_path: "/home/harmoon/projects/pico-mem-rust/engram_memory_db"
+  collection_name: "engrams"
+
+memory:
+  max_memory_results: 3
+  idle_timeout_minutes: 3
+
+logging:
+  log_file: "/tmp/picoclaw-hook-cloud-rust.log"
