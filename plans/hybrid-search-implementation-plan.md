@@ -89,6 +89,8 @@ pub enum MemoryType {
     Preference,
     Fact,
     Task,
+    #[serde(other)]
+    Other,  // 兜底变体：防止 LLM 输出未知枚举值导致解析失败
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -96,6 +98,8 @@ pub enum MemoryType {
 pub enum TaskStatus {
     InProgress,
     Done,
+    #[serde(other)]
+    Other,  // 兜底变体：防止 LLM 输出未知状态导致解析失败
 }
 
 impl MemoryExtraction {
@@ -110,6 +114,8 @@ impl MemoryExtraction {
     }
 }
 ```
+
+> **⚠️ 枚举反序列化风险防御**：大模型即使被强制要求输出 JSON，偶尔也会出现"幻觉枚举值"（如 `memory_type: "insight"`）。默认情况下 `serde` 遇到未知枚举值会直接报错导致整个 JSON 解析失败。通过添加 `#[serde(other)]` 的兜底变体，可以优雅地处理这种情况，避免系统崩溃。
 
 #### 1.2 修改 `src/api.rs`
 
@@ -173,10 +179,6 @@ llm:
 
 - 重命名为 `store_memory`，接收 `MemoryExtraction` 结构体
 - 构建包含所有元数据字段的 `RecordBatch`
-
-#### 2.3 数据库迁移策略
-
-- 检测旧表结构，自动迁移或重建
 
 ---
 
@@ -276,7 +278,15 @@ pub async fn search_with_rerank(
     let mut ranked: Vec<_> = candidates
         .into_iter()
         .map(|record| {
-            let score = (record.similarity * similarity_weight)
+            // ⚠️ 重要：确保 similarity 值域为 [0, 1]
+            // LanceDB 返回的是距离（distance），需要转换为相似度：
+            // - 余弦距离：similarity = 1.0 - distance
+            // - L2 距离：需要根据向量维度做归一化处理
+            // 此处假设 LanceDB 使用余弦距离，且 distance ∈ [0, 2]
+            // 实际使用时需根据 LanceDB 配置调整转换公式
+            let similarity = 1.0 - record.distance;
+            
+            let score = (similarity * similarity_weight)
                       + ((record.importance as f32 / 10.0) * importance_weight);
             (score, record)
         })
@@ -286,6 +296,12 @@ pub async fn search_with_rerank(
     Ok(ranked.into_iter().take(5).map(|(_, r)| r).collect())
 }
 ```
+
+> **⚠️ 数值映射注意事项**：打分公式中 `similarity` 和 `importance / 10.0` 必须在同一量级（均为 [0, 1]）。LanceDB 返回的是距离而非相似度，需要根据距离类型做转换：
+> - **余弦距离**：`similarity = 1.0 - distance`（distance ∈ [0, 2]，similarity ∈ [-1, 1]）
+> - **L2 距离**：需要额外归一化，如 `similarity = 1.0 / (1.0 + distance)`
+>
+> 实际实现时应添加防守性注释，并在配置中记录当前使用的距离度量类型。
 
 #### 4.3 任务轮询（Task Polling）
 
@@ -324,14 +340,23 @@ pub async fn check_pending_tasks(&self) -> Result<Vec<MemoryRecord>> {
 - `lancedb` - 向量数据库
 - `arrow` - 数据批处理
 
+> **字符串拼接说明**：在 `search_by_domain` 中构建 SQL 过滤条件时，使用 `memory_types.iter().map(...).join(",")` 需要引入 `itertools` crate。也可以直接使用 Rust 标准库的 `Vec::join` 方法：
+> ```rust
+> // 使用 itertools（更优雅）
+> memory_types.iter().map(|t| format!("'{}'", t)).join(",")
+>
+> // 使用标准库（无需额外依赖）
+> memory_types.iter().map(|t| format!("'{}'", t)).collect::<Vec<_>>().join(",")
+> ```
+> 建议使用标准库方案，避免引入额外依赖。
+
 ---
 
 ## 六、风险与注意事项
 
-1. **向后兼容**：旧数据库需要迁移策略
-2. **LLM JSON 输出稳定性**：不同模型对 JSON 模式的支持程度不同
-3. **性能影响**：前置查重会增加一次向量查询，但 `limit(1)` 开销很小
-4. **配置迁移**：需要更新现有 `config.yaml` 文件
+1. **LLM JSON 输出稳定性**：不同模型对 JSON 模式的支持程度不同，需要测试
+2. **性能影响**：前置查重会增加一次向量查询，但 `limit(1)` 开销很小
+3. **配置更新**：需要更新现有 `config.yaml` 文件以使用新的模板格式
 
 ---
 
