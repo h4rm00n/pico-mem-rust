@@ -36,6 +36,10 @@ pub struct DatabaseConfig {
 pub struct MemoryConfig {
     pub max_memory_results: usize,
     pub idle_timeout_minutes: u64,
+    pub overlap_threshold: f32,
+    pub enable_dedup: bool,
+    pub similarity_weight: f32,
+    pub importance_weight: f32,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
