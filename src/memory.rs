@@ -1,5 +1,5 @@
 use anyhow::Result;
-use arrow::array::{Array, FixedSizeListArray, Int64Array, RecordBatch, StringArray};
+use arrow::array::{Array, FixedSizeListArray, RecordBatch, StringArray};
 use arrow::datatypes::{DataType, Field, Schema, Float32Type};
 use chrono::Local;
 use lancedb::query::{ExecutableQuery, QueryBase};
@@ -99,11 +99,11 @@ impl MemoryManager {
     pub async fn store_summary(&self, db: &Connection, collection_name: &str, summary: &str) -> Result<()> {
         let vector = self.api_client.get_embedding(summary).await?;
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
-        let id = uuid::Uuid::new_v4();
-        let id_int = (id.as_u128() % (1u128 << 63)) as i64;
+        // 使用 UUID 字符串作为主键，避免整数 ID 碰撞风险
+        let id_str = uuid::Uuid::new_v4().to_string();
 
         let schema = Arc::new(Schema::new(vec![
-            Field::new("id", DataType::Int64, false),
+            Field::new("id", DataType::Utf8, false),
             Field::new("text", DataType::Utf8, false),
             Field::new("role", DataType::Utf8, false),
             Field::new("timestamp", DataType::Utf8, false),
@@ -120,7 +120,7 @@ impl MemoryManager {
         let record_batch = RecordBatch::try_new(
             schema,
             vec![
-                Arc::new(Int64Array::from(vec![id_int])),
+                Arc::new(StringArray::from(vec![id_str])),
                 Arc::new(StringArray::from(vec![summary])),
                 Arc::new(StringArray::from(vec!["system_summary"])),
                 Arc::new(StringArray::from(vec![timestamp])),
