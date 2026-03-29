@@ -92,10 +92,7 @@ impl ApiClient {
     }
 
     pub async fn summarize(&self, text_block: &str) -> Result<String> {
-        let prompt = format!(
-            "请提取以下对话中的核心事实、用户偏好和重要状态，忽略寒暄。输出简练的总结：\n\n{}",
-            text_block
-        );
+        let prompt = self.llm_config.summarize_prompt.replace("{text_block}", text_block);
 
         let request = ChatRequest {
             model: self.llm_config.model.clone(),

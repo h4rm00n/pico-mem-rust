@@ -15,6 +15,7 @@ pub struct LlmConfig {
     pub api_key: String,
     pub base_url: String,
     pub model: String,
+    pub summarize_prompt: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
