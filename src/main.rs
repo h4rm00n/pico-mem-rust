@@ -118,17 +118,21 @@ async fn handle_before_llm(
                     if user_content.len() > 200 { "..." } else { "" }
                 );
 
-                match manager.search_relevant(&user_content).await {
+                match manager.search_with_rerank(&user_content, 20).await {
                     Ok(relevant_memories) => {
                         if !relevant_memories.is_empty() {
-                            info!("[Before LLM] Found {} relevant memories:", relevant_memories.len());
+                            info!("[Before LLM] Found {} relevant memories (after rerank):", relevant_memories.len());
                             for (i, mem) in relevant_memories.iter().enumerate() {
                                 let summary = mem.get("summary").and_then(|t| t.as_str()).unwrap_or("");
                                 let timestamp = mem.get("timestamp").and_then(|t| t.as_str()).unwrap_or("unknown");
                                 let domain = mem.get("domain").and_then(|d| d.as_str()).unwrap_or("unknown");
+                                let importance = mem.get("importance").and_then(|v| v.as_u64()).unwrap_or(0);
+                                let score = mem.get("score").and_then(|s| s.as_f64()).unwrap_or(0.0);
                                 info!(
-                                    "  [Memory {}] timestamp={}, domain={}: {}{}",
+                                    "  [Memory {}] score={:.3}, importance={}, timestamp={}, domain={}: {}{}",
                                     i + 1,
+                                    score,
+                                    importance,
                                     timestamp,
                                     domain,
                                     summary.chars().take(100).collect::<String>(),
