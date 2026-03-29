@@ -2,6 +2,7 @@ mod api;
 mod config;
 mod memory;
 mod rpc;
+mod schema;
 
 use anyhow::Result;
 use tracing_subscriber::prelude::*;
@@ -117,28 +118,36 @@ async fn handle_before_llm(
                     if user_content.len() > 200 { "..." } else { "" }
                 );
 
-                match manager.search_relevant(&user_content).await {
+                match manager.search_with_rerank(&user_content, 20).await {
                     Ok(relevant_memories) => {
                         if !relevant_memories.is_empty() {
-                            info!("[Before LLM] Found {} relevant memories:", relevant_memories.len());
+                            info!("[Before LLM] Found {} relevant memories (after rerank):", relevant_memories.len());
                             for (i, mem) in relevant_memories.iter().enumerate() {
-                                let text = mem.get("text").and_then(|t| t.as_str()).unwrap_or("");
+                                let summary = mem.get("summary").and_then(|t| t.as_str()).unwrap_or("");
                                 let timestamp = mem.get("timestamp").and_then(|t| t.as_str()).unwrap_or("unknown");
+                                let domain = mem.get("domain").and_then(|d| d.as_str()).unwrap_or("unknown");
+                                let importance = mem.get("importance").and_then(|v| v.as_u64()).unwrap_or(0);
+                                let score = mem.get("score").and_then(|s| s.as_f64()).unwrap_or(0.0);
                                 info!(
-                                    "  [Memory {}] timestamp={}: {}{}",
+                                    "  [Memory {}] score={:.3}, importance={}, timestamp={}, domain={}: {}{}",
                                     i + 1,
+                                    score,
+                                    importance,
                                     timestamp,
-                                    text.chars().take(100).collect::<String>(),
-                                    if text.len() > 100 { "..." } else { "" }
+                                    domain,
+                                    summary.chars().take(100).collect::<String>(),
+                                    if summary.len() > 100 { "..." } else { "" }
                                 );
                             }
 
                             let mut memory_lines = vec!["\n\n<memory_context>".to_string()];
                             for mem in &relevant_memories {
+                                let id = mem.get("id").and_then(|i| i.as_str()).unwrap_or("unknown");
                                 let timestamp = mem.get("timestamp").and_then(|t| t.as_str()).unwrap_or("unknown");
-                                let text = mem.get("text").and_then(|t| t.as_str()).unwrap_or("");
-                                memory_lines.push(format!(r#"  <memory timestamp="{}">"#, timestamp));
-                                memory_lines.push(format!("    {}", text));
+                                let summary = mem.get("summary").and_then(|t| t.as_str()).unwrap_or("");
+                                let domain = mem.get("domain").and_then(|d| d.as_str()).unwrap_or("unknown");
+                                memory_lines.push(format!(r#"  <memory id="{}" timestamp="{}" domain="{}">"#, id, timestamp, domain));
+                                memory_lines.push(format!("    {}", summary));
                                 memory_lines.push("  </memory>".to_string());
                             }
                             memory_lines.push("</memory_context>".to_string());
@@ -316,6 +325,7 @@ async fn main() -> Result<()> {
     let api_client = ApiClient::new(
         config.llm.clone(),
         config.embedding.clone(),
+        config.memory.clone(),
     );
 
     let memory_manager = Arc::new(Mutex::new(None as Option<MemoryManager>));
@@ -323,7 +333,7 @@ async fn main() -> Result<()> {
     let db = connect(&db_path).execute().await?;
     let init_collection_name = collection_name.clone();
     let init_config_embedding_dim = config.embedding.embedding_dim;
-    let init_config_max_memory = config.memory.max_memory_results;
+    let init_memory_config = config.memory.clone();
 
     tokio::spawn(async move {
         info!("Background: Initializing LanceDB at {}", db_path);
@@ -332,8 +342,7 @@ async fn main() -> Result<()> {
             &init_collection_name,
             api_client,
             init_config_embedding_dim,
-            init_config_max_memory,
-            idle_timeout_minutes,
+            &init_memory_config,
         )
         .await
         {

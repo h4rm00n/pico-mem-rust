@@ -2,12 +2,14 @@ use anyhow::Result;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::config::{LlmConfig, EmbeddingConfig};
+use crate::config::{LlmConfig, EmbeddingConfig, MemoryConfig};
+use crate::schema::MemoryExtraction;
 
 pub struct ApiClient {
     client: Client,
     llm_config: LlmConfig,
     embedding_config: EmbeddingConfig,
+    memory_config: MemoryConfig,
 }
 
 #[derive(Serialize)]
@@ -33,11 +35,19 @@ struct ChatMessage {
 }
 
 #[derive(Serialize)]
+struct ResponseFormat {
+    #[serde(rename = "type")]
+    format_type: String,
+}
+
+#[derive(Serialize)]
 struct ChatRequest {
     model: String,
     messages: Vec<ChatMessage>,
     temperature: f32,
     max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    response_format: Option<ResponseFormat>,
 }
 
 #[derive(Deserialize)]
@@ -56,11 +66,12 @@ struct ChatMessageContent {
 }
 
 impl ApiClient {
-    pub fn new(llm_config: LlmConfig, embedding_config: EmbeddingConfig) -> Self {
+    pub fn new(llm_config: LlmConfig, embedding_config: EmbeddingConfig, memory_config: MemoryConfig) -> Self {
         Self {
             client: Client::new(),
             llm_config,
             embedding_config,
+            memory_config,
         }
     }
 
@@ -91,8 +102,11 @@ impl ApiClient {
             .ok_or_else(|| anyhow::anyhow!("No embedding returned"))
     }
 
-    pub async fn summarize(&self, text_block: &str) -> Result<String> {
-        let prompt = self.llm_config.summarize_prompt.replace("{text_block}", text_block);
+    pub async fn summarize_with_schema(&self, text_block: &str) -> Result<Vec<MemoryExtraction>> {
+        let schema_desc = MemoryExtraction::schema_description(&self.memory_config.domains);
+        let prompt = self.llm_config.summarize_prompt
+            .replace("{SCHEMA_PLACEHOLDER}", &schema_desc)
+            .replace("{CHAT_HISTORY}", text_block);
 
         let request = ChatRequest {
             model: self.llm_config.model.clone(),
@@ -101,7 +115,10 @@ impl ApiClient {
                 content: prompt,
             }],
             temperature: 0.1,
-            max_tokens: 300,
+            max_tokens: 1000,
+            response_format: Some(ResponseFormat {
+                format_type: "json_object".to_string(),
+            }),
         };
 
         let response = self
@@ -118,10 +135,15 @@ impl ApiClient {
         
         let chat_response: ChatResponse = response.json().await?;
         
-        chat_response
+        let content = chat_response
             .choices
             .first()
             .map(|c| c.message.content.trim().to_string())
-            .ok_or_else(|| anyhow::anyhow!("No response returned"))
+            .ok_or_else(|| anyhow::anyhow!("No response returned"))?;
+
+        let extractions: Vec<MemoryExtraction> = serde_json::from_str(&content)
+            .map_err(|e| anyhow::anyhow!("Failed to parse JSON response: {}. Content: {}", e, content))?;
+
+        Ok(extractions)
     }
 }

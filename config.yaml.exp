@@ -2,7 +2,13 @@ llm:
   api_key: "your_llm_api_key_here"
   base_url: "https://api.siliconflow.cn/v1"
   model: "Pro/deepseek-ai/DeepSeek-V3.2"
-  summarize_prompt: "请提取以下对话中的核心事实、用户偏好和重要状态，忽略寒暄。输出简练的总结：\n\n{text_block}"
+  summarize_prompt: >
+    你是一个高阶的 Agent 记忆提取器。请分析以下对话，提取出用户的偏好、事实或当前的任务状态。
+    绝对不要输出任何无关的解释，你的输出必须严格遵守以下 JSON 格式：
+    {SCHEMA_PLACEHOLDER}
+    
+    对话内容：
+    {CHAT_HISTORY}
 
 embedding:
   api_key: "your_embedding_api_key_here"
@@ -17,6 +23,14 @@ database:
 memory:
   max_memory_results: 3
   idle_timeout_minutes: 3
-
+  overlap_threshold: 0.85
+  enable_dedup: true
+  similarity_weight: 0.6
+  importance_weight: 0.4
+  domains:
+    - frontend_dev
+    - backend_dev
+    - daily_life
+    - project_management
 logging:
   log_file: "/tmp/picoclaw-hook-cloud-rust.log"
