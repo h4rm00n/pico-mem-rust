@@ -142,10 +142,11 @@ async fn handle_before_llm(
 
                             let mut memory_lines = vec!["\n\n<memory_context>".to_string()];
                             for mem in &relevant_memories {
+                                let id = mem.get("id").and_then(|i| i.as_str()).unwrap_or("unknown");
                                 let timestamp = mem.get("timestamp").and_then(|t| t.as_str()).unwrap_or("unknown");
                                 let summary = mem.get("summary").and_then(|t| t.as_str()).unwrap_or("");
                                 let domain = mem.get("domain").and_then(|d| d.as_str()).unwrap_or("unknown");
-                                memory_lines.push(format!(r#"  <memory timestamp="{}" domain="{}">"#, timestamp, domain));
+                                memory_lines.push(format!(r#"  <memory id="{}" timestamp="{}" domain="{}">"#, id, timestamp, domain));
                                 memory_lines.push(format!("    {}", summary));
                                 memory_lines.push("  </memory>".to_string());
                             }

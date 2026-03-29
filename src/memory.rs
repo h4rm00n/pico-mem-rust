@@ -258,9 +258,10 @@ impl MemoryManager {
 
             let mut candidates: Vec<(f32, serde_json::Value)> = Vec::new();
             for batch in batches {
-                if let (Some(summary_col), Some(timestamp_col), Some(domain_col),
+                if let (Some(id_col), Some(summary_col), Some(timestamp_col), Some(domain_col),
                         Some(memory_type_col), Some(importance_col), Some(status_col),
                         Some(distance_col)) = (
+                    batch.column_by_name("id"),
                     batch.column_by_name("summary"),
                     batch.column_by_name("timestamp"),
                     batch.column_by_name("domain"),
@@ -269,6 +270,7 @@ impl MemoryManager {
                     batch.column_by_name("status"),
                     batch.column_by_name("_distance")
                 ) {
+                    let ids = id_col.as_any().downcast_ref::<StringArray>().unwrap();
                     let summaries = summary_col.as_any().downcast_ref::<StringArray>().unwrap();
                     let timestamps = timestamp_col.as_any().downcast_ref::<StringArray>().unwrap();
                     let domains = domain_col.as_any().downcast_ref::<StringArray>().unwrap();
@@ -287,6 +289,7 @@ impl MemoryManager {
                         candidates.push((
                             score,
                             serde_json::json!({
+                                "id": ids.value(i),
                                 "summary": summaries.value(i),
                                 "timestamp": timestamps.value(i),
                                 "domain": domains.value(i),
