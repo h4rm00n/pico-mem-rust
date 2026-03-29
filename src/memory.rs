@@ -356,25 +356,29 @@ impl MemoryManager {
     }
 
     pub async fn summarize_and_store(&self, db: &Connection, collection_name: &str, text: &str) -> Result<()> {
-        let memory = self.api_client.summarize_with_schema(text).await?;
-        info!(
-            "Generated Memory: summary={}, domain={}, type={:?}, importance={}, status={:?}",
-            memory.summary.chars().take(100).collect::<String>(),
-            memory.domain,
-            memory.memory_type,
-            memory.importance,
-            memory.status
-        );
+        let memories = self.api_client.summarize_with_schema(text).await?;
+        info!("Generated {} memory entries from conversation", memories.len());
         
-        let vector = self.api_client.get_embedding(&memory.summary).await?;
-        let result = self.store_new_memory(db, collection_name, &memory, vector).await?;
-        
-        match result {
-            StoreResult::Stored => {
-                info!("Memory engram successfully stored.");
-            }
-            StoreResult::Rejected { reason, similarity } => {
-                info!("Memory rejected: {} (similarity={:.3})", reason, similarity);
+        for memory in memories {
+            info!(
+                "Memory entry: summary={}, domain={}, type={:?}, importance={}, status={:?}",
+                memory.summary.chars().take(100).collect::<String>(),
+                memory.domain,
+                memory.memory_type,
+                memory.importance,
+                memory.status
+            );
+            
+            let vector = self.api_client.get_embedding(&memory.summary).await?;
+            let result = self.store_new_memory(db, collection_name, &memory, vector).await?;
+            
+            match result {
+                StoreResult::Stored => {
+                    info!("Memory engram successfully stored.");
+                }
+                StoreResult::Rejected { reason, similarity } => {
+                    info!("Memory rejected: {} (similarity={:.3})", reason, similarity);
+                }
             }
         }
         

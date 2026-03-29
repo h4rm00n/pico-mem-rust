@@ -7,7 +7,7 @@
 Pico-Mem 是 PicoClaw 的 hook 服务，主要功能包括：
 
 - **对话捕获**：自动捕获用户和助手的对话消息
-- **智能记忆提取**：使用 LLM 从对话中提取用户偏好、事实信息和任务状态
+- **智能记忆提取**：使用 LLM 从对话中提取多条用户偏好、事实信息和任务状态（支持一次对话提取多条独立记忆）
 - **向量存储**：使用 LanceDB 进行高效的向量存储和检索
 - **记忆注入**：在 LLM 请求前自动注入相关的历史记忆上下文
 - **空闲总结**：在对话空闲时自动触发记忆总结
@@ -147,6 +147,10 @@ memory:
   enable_dedup: true
   similarity_weight: 0.6
   importance_weight: 0.4
+  domains:
+    - frontend_dev
+    - backend_dev
+    - daily_life
 ```
 
 | 字段 | 类型 | 必填 | 默认值 | 说明 |
@@ -155,6 +159,7 @@ memory:
 | `idle_timeout_minutes` | integer | 是 | 3 | 空闲超时时间（分钟），超过此时间无新消息则触发记忆总结 |
 | `overlap_threshold` | float | 是 | 0.85 | 重叠阈值（0.0-1.0），用于判断新记忆是否与已有记忆重复 |
 | `enable_dedup` | boolean | 是 | true | 是否启用记忆去重功能 |
+| `domains` | string[] | 否 | `["frontend_dev", "backend_dev", "daily_life"]` | 领域标签列表，用于记忆分类。LLM 会从列表中选择最匹配的领域 |
 
 #### 记忆去重机制说明
 
@@ -228,6 +233,10 @@ memory:
   enable_dedup: true
   similarity_weight: 0.6
   importance_weight: 0.4
+  domains:
+    - frontend_dev
+    - backend_dev
+    - daily_life
 
 logging:
   log_file: "/tmp/pico-mem.log"

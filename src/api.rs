@@ -2,13 +2,14 @@ use anyhow::Result;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::config::{LlmConfig, EmbeddingConfig};
+use crate::config::{LlmConfig, EmbeddingConfig, MemoryConfig};
 use crate::schema::MemoryExtraction;
 
 pub struct ApiClient {
     client: Client,
     llm_config: LlmConfig,
     embedding_config: EmbeddingConfig,
+    memory_config: MemoryConfig,
 }
 
 #[derive(Serialize)]
@@ -65,11 +66,12 @@ struct ChatMessageContent {
 }
 
 impl ApiClient {
-    pub fn new(llm_config: LlmConfig, embedding_config: EmbeddingConfig) -> Self {
+    pub fn new(llm_config: LlmConfig, embedding_config: EmbeddingConfig, memory_config: MemoryConfig) -> Self {
         Self {
             client: Client::new(),
             llm_config,
             embedding_config,
+            memory_config,
         }
     }
 
@@ -100,8 +102,8 @@ impl ApiClient {
             .ok_or_else(|| anyhow::anyhow!("No embedding returned"))
     }
 
-    pub async fn summarize_with_schema(&self, text_block: &str) -> Result<MemoryExtraction> {
-        let schema_desc = MemoryExtraction::schema_description();
+    pub async fn summarize_with_schema(&self, text_block: &str) -> Result<Vec<MemoryExtraction>> {
+        let schema_desc = MemoryExtraction::schema_description(&self.memory_config.domains);
         let prompt = self.llm_config.summarize_prompt
             .replace("{SCHEMA_PLACEHOLDER}", &schema_desc)
             .replace("{CHAT_HISTORY}", text_block);
@@ -113,7 +115,7 @@ impl ApiClient {
                 content: prompt,
             }],
             temperature: 0.1,
-            max_tokens: 500,
+            max_tokens: 1000,
             response_format: Some(ResponseFormat {
                 format_type: "json_object".to_string(),
             }),
@@ -139,9 +141,9 @@ impl ApiClient {
             .map(|c| c.message.content.trim().to_string())
             .ok_or_else(|| anyhow::anyhow!("No response returned"))?;
 
-        let extraction: MemoryExtraction = serde_json::from_str(&content)
+        let extractions: Vec<MemoryExtraction> = serde_json::from_str(&content)
             .map_err(|e| anyhow::anyhow!("Failed to parse JSON response: {}. Content: {}", e, content))?;
 
-        Ok(extraction)
+        Ok(extractions)
     }
 }

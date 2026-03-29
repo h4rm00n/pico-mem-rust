@@ -40,6 +40,16 @@ pub struct MemoryConfig {
     pub enable_dedup: bool,
     pub similarity_weight: f32,
     pub importance_weight: f32,
+    #[serde(default = "default_domains")]
+    pub domains: Vec<String>,
+}
+
+fn default_domains() -> Vec<String> {
+    vec![
+        "frontend_dev".to_string(),
+        "backend_dev".to_string(),
+        "daily_life".to_string(),
+    ]
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

@@ -27,6 +27,10 @@ memory:
   enable_dedup: true
   similarity_weight: 0.6
   importance_weight: 0.4
-
+  domains:
+    - frontend_dev
+    - backend_dev
+    - daily_life
+    - project_management
 logging:
   log_file: "/tmp/picoclaw-hook-cloud-rust.log"

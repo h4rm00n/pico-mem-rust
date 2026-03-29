@@ -324,6 +324,7 @@ async fn main() -> Result<()> {
     let api_client = ApiClient::new(
         config.llm.clone(),
         config.embedding.clone(),
+        config.memory.clone(),
     );
 
     let memory_manager = Arc::new(Mutex::new(None as Option<MemoryManager>));
