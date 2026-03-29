@@ -13,8 +13,6 @@ use tracing::info;
 
 use crate::api::ApiClient;
 
-const VECTOR_DIM: i32 = 1024;
-
 pub struct MemoryManager {
     buffer: Arc<Mutex<Vec<String>>>,
     last_event_time: Arc<Mutex<Instant>>,
@@ -23,6 +21,7 @@ pub struct MemoryManager {
     max_memory_results: usize,
     idle_timeout: Duration,
     total_messages_added: Arc<Mutex<usize>>,
+    embedding_dim: i32,
 }
 
 impl MemoryManager {
@@ -30,10 +29,17 @@ impl MemoryManager {
         db_path: &str,
         collection_name: &str,
         api_client: ApiClient,
-        _embedding_dim: usize,
+        embedding_dim: usize,
         max_memory_results: usize,
         idle_timeout_minutes: u64,
     ) -> Result<Self> {
+        // 验证维度有效性
+        if embedding_dim == 0 || embedding_dim > 8192 {
+            anyhow::bail!("Invalid embedding dimension: {}, must be 1-8192", embedding_dim);
+        }
+        
+        let embedding_dim = embedding_dim as i32;
+        
         let db = connect(db_path).execute().await?;
         
         let table = if db.table_names().execute().await?.contains(&collection_name.to_string()) {
@@ -50,6 +56,7 @@ impl MemoryManager {
             max_memory_results,
             idle_timeout: Duration::from_secs(idle_timeout_minutes * 60),
             total_messages_added: Arc::new(Mutex::new(0)),
+            embedding_dim,
         })
     }
 
@@ -104,7 +111,7 @@ impl MemoryManager {
                 "vector",
                 DataType::FixedSizeList(
                     Arc::new(Field::new("item", DataType::Float32, true)),
-                    VECTOR_DIM,
+                    self.embedding_dim,
                 ),
                 false,
             ),
@@ -120,7 +127,7 @@ impl MemoryManager {
                 Arc::new(
                     FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
                         vec![Some(vector.iter().map(|v| Some(*v)).collect::<Vec<_>>())],
-                        VECTOR_DIM,
+                        self.embedding_dim,
                     ),
                 ),
             ],
