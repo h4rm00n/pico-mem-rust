@@ -4,7 +4,7 @@ llm:
   model: "Pro/deepseek-ai/DeepSeek-V3.2"
   summarize_prompt: >
     你是一个高阶的 Agent 记忆提取器。请分析以下对话，提取出用户的偏好、事实或当前的任务状态。
-    绝对不要输出任何无关的解释，你的输出必须严格遵守以下 JSON 格式：
+    绝对不要输出任何无关的解释，你的输出必须严格遵守以下 JSON 格式，返回一个对象数组：
     {SCHEMA_PLACEHOLDER}
     
     对话内容：

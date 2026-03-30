@@ -141,8 +141,15 @@ impl ApiClient {
             .map(|c| c.message.content.trim().to_string())
             .ok_or_else(|| anyhow::anyhow!("No response returned"))?;
 
-        let extractions: Vec<MemoryExtraction> = serde_json::from_str(&content)
-            .map_err(|e| anyhow::anyhow!("Failed to parse JSON response: {}. Content: {}", e, content))?;
+        // 尝试解析为数组，如果失败则尝试解析为单个对象
+        let extractions: Vec<MemoryExtraction> = if content.trim().starts_with('[') {
+            serde_json::from_str(&content)
+                .map_err(|e| anyhow::anyhow!("Failed to parse JSON array: {}. Content: {}", e, content))?
+        } else {
+            let single: MemoryExtraction = serde_json::from_str(&content)
+                .map_err(|e| anyhow::anyhow!("Failed to parse JSON object: {}. Content: {}", e, content))?;
+            vec![single]
+        };
 
         Ok(extractions)
     }
